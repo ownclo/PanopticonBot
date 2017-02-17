@@ -21,14 +21,19 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Regex
 import logging
 import re
 
+from jira import JIRA
+
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
+JIRA_URL = "http://jira.mara.local/"
 PREFIX_LIST = ["PANSERV", "PAN", "DUTY", "DONG"]
 PREFIX_PATTERN = "|".join(PREFIX_LIST)
+
+J = JIRA(JIRA_URL)
 
 # Define a few command handlers. These usually take the two arguments bot and
 # update. Error handlers also receive the raised TelegramError object in error.
@@ -43,14 +48,37 @@ def help(bot, update):
 def hyperlinky(msg):
     return "http://jira.mara.local/browse/" + msg
 
+def describe(taskName):
+    url = hyperlinky(taskName)
+    error = None
+
+    try:
+        issue = J.issue(taskName).fields
+        name = issue.summary
+        assignee = issue.assignee.displayName
+        status = issue.status.name
+        return pprint([('url', url), ('name', name), ('assignee', assignee), ('status', status)])
+    except Exception as e:
+        print e
+        error = e
+        return pprint([('url', url), ('error', error)])
+
+def pprint(tuples):
+    res = ""
+    for (k, v) in tuples:
+        res += k.encode('utf-8') + ": " + v.encode('utf-8') + "\n"
+    return res
+
 
 def hyperlinize(bot, update):
     text = update.message.text
     tasks = findTasks(text, PREFIX_PATTERN)
-    taskUrls = [hyperlinky(task) for task in tasks]
-    if len(taskUrls) > 0:
-        reply = "\n".join(taskUrls)
+    taskDesc = [describe(task) for task in tasks]
+    if len(taskDesc) > 0:
+        reply = "\n".join(taskDesc)
         update.message.reply_text(reply)
+
+
 
 # => findTasks("sdlgkfdjg PAN-1234 fsfgPAN-4321 https://s/PAN-678", ["PAN"])
 # ["PAN-1234"]
