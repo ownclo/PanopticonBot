@@ -16,7 +16,6 @@ Press Ctrl-C on the command line or send a signal to the process to stop the
 bot.
 """
 
-import telegram
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, RegexHandler
 import logging
 import re
@@ -42,8 +41,14 @@ def start(bot, update):
 
 
 def help(bot, update):
-    update.message.reply_text('Help!')
+    update.message.reply_text('''
+        /unblocked username -- all not closed user tasks with all closed blockers
+    ''')
 
+def unblocked(bot, update):
+    user = update.message.text.split(' ')[1]
+    reply = 'Unblocked Tasks: \n' + findUnblockedTasks(user)
+    update.message.reply_text(reply)
 
 def hyperlinky(msg):
     return "http://jira.mara.local/browse/" + msg
@@ -51,7 +56,6 @@ def hyperlinky(msg):
 def describe(taskName):
     url = hyperlinky(taskName)
     error = None
-
     try:
         issue = J.issue(taskName).fields
         name = issue.summary
@@ -62,6 +66,31 @@ def describe(taskName):
         print e
         error = e
         return pprint([('url', url), ('error', error)])
+
+
+def findUnblockedTasks(userName):
+    issues = J.search_issues('assignee = ' + userName + ' AND status != Closed AND status != Resolved ORDER BY updated DESC')
+    unblockedTasks = ''
+    for issue in issues:
+        isUnblocked = True
+        containsBlocker = False
+        for link in issue.fields.issuelinks:
+            # 10000 -> Blocked
+            if link.type.id == '10000':
+                try:
+                    blocker = link.inwardIssue
+                    # 6 -> Closed
+                    if blocker.fields.status.id != '6':
+                        isUnblocked = False
+                    containsBlocker = True
+                except:
+                    pass
+        if isUnblocked == True and containsBlocker == True:
+            unblockedTasks =  unblockedTasks + describe(issue.key)
+    if unblockedTasks == '':
+        return 'None'
+    return unblockedTasks
+
 
 def pprint(tuples):
     res = ""
@@ -99,6 +128,7 @@ def main():
     # on different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
+    dp.add_handler(CommandHandler("unblocked", unblocked))
 
     # on noncommand i.e message - echo the message on Telegram
     dp.add_handler(MessageHandler(Filters.text, hyperlinize))
