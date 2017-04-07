@@ -16,7 +16,7 @@ Press Ctrl-C on the command line or send a signal to the process to stop the
 bot.
 """
 
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, RegexHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, RegexHandler, Job
 import logging
 import re
 
@@ -136,6 +136,9 @@ def main():
     # log all errors
     dp.add_error_handler(error)
 
+    job_minute = Job(callback_minute, 10.0)
+    updater.job_queue.put(job_minute)
+
     # Start the Bot
     updater.start_polling()
 
@@ -144,6 +147,13 @@ def main():
     # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
 
+def callback_minute(bot, job):
+    import requests
+    link = "http://bettingservice.knk.local:8080/bettingservice/health"
+    f = requests.get(link)
+    json = f.text
+    if "WARNING" in json or "ERROR" in json:
+        bot.sendMessage(chat_id='@panopticon_warn', text='Health status is not OK: \n' + json)
 
 if __name__ == '__main__':
     main()
